@@ -1,0 +1,11 @@
+{
+  "name": "hexo",
+  "version": "2.4.5",
+  "private": true,
+  "dependencies": {
+    "hexo-migrator-rss": "0.0.5",
+    "load": "~1.0.0",
+    "lodash": "~2.4.1",
+    "hexo-generator-feed": "~0.1.0"
+  }
+}
