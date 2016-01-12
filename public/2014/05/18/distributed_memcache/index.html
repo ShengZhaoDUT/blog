@@ -1,0 +1,251 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Distributed_memcache | ShengZhao&#39;s Blog</title>
+  <meta name="author" content="ShengZhao">
+  
+  <meta name="description" content="Distributed Memory Cache
+memcached
+
+redis
+
+
+本文主要总结了memcached和redis两种分布式缓存，两者的实现和Consistent Hash方面的实现。最终给出一个memcached和redis之间的区别。
+Memcached
+Free &amp;amp; ">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="Distributed_memcache"/>
+  <meta property="og:site_name" content="ShengZhao&#39;s Blog"/>
+
+  
+    <meta property="og:image" content="undefined"/>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="ShengZhao&#39;s Blog" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">ShengZhao&#39;s Blog</a></h1>
+  <h2><a href="/">专注分布式技术</a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div>
+</header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2014-05-18T13:31:15.000Z"><a href="/2014/05/18/distributed_memcache/">2014-05-18</a></time>
+      
+      
+  
+    <h1 class="title">Distributed_memcache</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h2 id="Distributed_Memory_Cache"><a href="#Distributed_Memory_Cache" class="headerlink" title="Distributed Memory Cache"></a>Distributed Memory Cache</h2><ul>
+<li><p>memcached</p>
+</li>
+<li><p>redis</p>
+</li>
+</ul>
+<p>本文主要总结了memcached和redis两种分布式缓存，两者的实现和Consistent Hash方面的实现。最终给出一个<br>memcached和redis之间的区别。</p>
+<h2 id="Memcached"><a href="#Memcached" class="headerlink" title="Memcached"></a>Memcached</h2><ul>
+<li>Free &amp; open source, high-performance, distributed memory object caching system.但是其实memcached<br>并没有实现分布式的集群设置，在server端没有实现key值的分布，需要在客户端自己设计逻辑实现。最简单的key值<br>分布是通过hash函数。采用hash函数进行key值分布，当有新节点加入或者已经存在的actived节点需要退出<br>整个集群时，整个hash函数会发生改变，导致整个key值在集群中重新分布，网络开销大。</li>
+<li>97年有大神（论文<br>以后我再找）提出了Consistent Hash. 在客户端采用Consistent Hash算法进行key值的分发，计算出当前key<br>在哪个机器上存取后，直接和该及其通信，完成key-value的读写。</li>
+<li><p>现在主流的memcached的Java客户端是:</p>
+<ul>
+<li><p>memcached-java-client</p>
+</li>
+<li><p>spymemcached</p>
+</li>
+<li><p>xmemcached</p>
+</li>
+</ul>
+<p>三者的比较在网上比比皆是。总之memcached-java-client比较稳定，但是后两者采用nio的IO方式，效率更高。</p>
+</li>
+</ul>
+<h2 id="Consistent_Hash"><a href="#Consistent_Hash" class="headerlink" title="Consistent Hash"></a>Consistent Hash</h2><ul>
+<li>Consistent Hash中路由表的算法</li>
+<li>虚拟节点</li>
+</ul>
+<h2 id="Redis"><a href="#Redis" class="headerlink" title="Redis"></a>Redis</h2><ul>
+<li>Redis用作缓存也非常常见，相比于memcached主要优势在于：</li>
+<li>有更加丰富的数据结构，memcached的value虽然支持序列化，但是每次修改时都要将所有的value取回然后更改之后再put回去，网络开销大。</li>
+<li>Redis可以同步到硬盘，数据可靠性更强，这也是它能称之为内存数据库的一个原因吧。</li>
+<li>Redis在数据量比较小的情况下，performance要比memcached好。</li>
+<li><p>当然redis的single-thread的模型确实有一些问题，但是内存的性能非常高，而且从一个帖子上看到，单线程也减少了对锁的考虑</p>
+<p>综合以上原因，redis越来越受到人们的欢迎。</p>
+</li>
+<li>同样，Redis来作Distributed memcache时，也需要做一些优化。虽然redis现在已经开始支持redis sharding cluster，但是看了设计之后，个人感觉现在server端的设计还很不完善，自发现的机制在可靠性，一致性方面都有一些问题。而且key值的分布也是通过广播的方式告诉其他节点。客户端无论发请求到哪个节点，都可以访问到一个key的range和机器的对应，当然客户端也可以通过缓存这部分数据来实现更好的性能。</li>
+<li>面对并不是很完善的设计，还是从客户端来实现更优秀，Jedis提供了一个consistent hash的实现，ShardedJedisPool, ShardedJedis可以方便在客户端进行数据的分发。</li>
+</ul>
+<hr>
+<ul>
+<li>邮件(zszhaoshengzs@163.com)</li>
+</ul>
+<hr>
+
+      
+    </div>
+    <footer>
+      
+        
+  
+  <div class="categories">
+    <a href="/categories/nosql/">nosql</a>, <a href="/categories/nosql/Distributed-System/">Distributed_System</a>
+  </div>
+
+        
+  
+  <div class="tags">
+    <a href="/tags/DHT/">DHT</a>, <a href="/tags/Distributed-System/">Distributed System</a>, <a href="/tags/memcache/">memcache</a>
+  </div>
+
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+  <h1 class="title">留言</h1>
+
+  
+      <div id="fb-root"></div>
+<script>
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=123456789012345";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+
+<div class="fb-comments" data-href="http://yoursite.com/2014/05/18/distributed_memcache/index.html" data-num-posts="5" data-width="840" data-colorscheme="light"></div>
+      
+  
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="搜索">
+    <input type="hidden" name="q" value="site:yoursite.com">
+  </form>
+</div>
+
+  
+<div class="widget tag">
+  <h3 class="title">分类</h3>
+  <ul class="entry">
+  
+    <li><a href="/categories/Distributed-System/">Distributed_System</a><small>2</small></li>
+  
+    <li><a href="/categories/nosql/Distributed-System/">Distributed_System</a><small>1</small></li>
+  
+    <li><a href="/categories/nosql/">nosql</a><small>2</small></li>
+  
+    <li><a href="/categories/杂计/">杂计</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+
+  
+<div class="widget tag">
+  <h3 class="title">标签</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/DHT/">DHT</a><small>1</small></li>
+  
+    <li><a href="/tags/Distributed-System/">Distributed System</a><small>3</small></li>
+  
+    <li><a href="/tags/Paxos/">Paxos</a><small>1</small></li>
+  
+    <li><a href="/tags/memcache/">memcache</a><small>1</small></li>
+  
+    <li><a href="/tags/nosql/">nosql</a><small>1</small></li>
+  
+    <li><a href="/tags/tech/">tech</a><small>1</small></li>
+  
+    <li><a href="/tags/新年/">新年</a><small>1</small></li>
+  
+    <li><a href="/tags/计划/">计划</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2016 ShengZhao
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>

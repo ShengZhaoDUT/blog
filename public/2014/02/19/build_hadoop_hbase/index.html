@@ -1,0 +1,224 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>在Hadoop上搭建HBase | ShengZhao&#39;s Blog</title>
+  <meta name="author" content="ShengZhao">
+  
+  <meta name="description" content="安装Hbase需要HDFS的支持，因此在搭建HBase集群首先应该搭建Hadoop集群。两者的版本需要匹配，才能正常通信。可以在Hadoop和Hbase的[选择]（http://hbase.apache.org/book.html#hadoop）中具体查看。
+安装环境：
+Hadoop-2.2.0，H">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="在Hadoop上搭建HBase"/>
+  <meta property="og:site_name" content="ShengZhao&#39;s Blog"/>
+
+  
+    <meta property="og:image" content="undefined"/>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="ShengZhao&#39;s Blog" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">ShengZhao&#39;s Blog</a></h1>
+  <h2><a href="/">专注分布式技术</a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div>
+</header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2014-02-19T02:53:58.000Z"><a href="/2014/02/19/build_hadoop_hbase/">2014-02-19</a></time>
+      
+      
+  
+    <h1 class="title">在Hadoop上搭建HBase</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <p>安装Hbase需要HDFS的支持，因此在搭建HBase集群首先应该搭建Hadoop集群。<br>两者的版本需要匹配，才能正常通信。<br>可以在Hadoop和Hbase的[选择]（<a href="http://hbase.apache.org/book.html#hadoop）中具体查看。" target="_blank" rel="external">http://hbase.apache.org/book.html#hadoop）中具体查看。</a></p>
+<p>安装环境：</p>
+<p>Hadoop-2.2.0，Hadoop Yarn稳定版</p>
+<p>Hbase-0.96.1,与上述Hadoop版本匹配</p>
+<p>1.安装Hadoop，在网上可以任意搜到相关教程，在配置中需要特别关注core-site.xml中fs.default.name配置项，再Hbase中会使用到该配置项。</p>
+<p>2.安装Hbase，首先下载Hbase相关版本并解压</p>
+<ul>
+<li><p>编辑/hbase/conf/hbase-env.sh</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">export HBASE_OPTS=<span class="string">"$HBASE_OPTS -XX:+HeapDumpOnOutOfMemoryError -XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode"</span></span><br><span class="line">export JAVA_HOME=/usr/lib/jvm/java-<span class="number">6</span>-openjdk-amd64</span><br><span class="line">export HBASE_MANAGES_ZK=<span class="keyword">true</span></span><br><span class="line">export HBASE_HOME=自定义的Hbase的路径</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>编辑/hbase/conf/hbase-site.sh</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">&lt;configuration&gt;</span><br><span class="line">&lt;property&gt;</span><br><span class="line"> &lt;name&gt;hbase.rootdir&lt;/name&gt;</span><br><span class="line"> &lt;value&gt;hdfs://hadoop-master:9000/hbase(与Hadoop中HDFS的端口号相关，注意匹配)&lt;/value&gt;</span><br><span class="line">&lt;/property&gt;</span><br><span class="line">&lt;property&gt;</span><br><span class="line"> &lt;name&gt;hbase.cluster.distributed&lt;/name&gt;</span><br><span class="line"> &lt;value&gt;true&lt;/value&gt;</span><br><span class="line">&lt;/property&gt;</span><br><span class="line">&lt;property&gt;</span><br><span class="line"> &lt;name&gt;hbase.master&lt;/name&gt;</span><br><span class="line"> &lt;value&gt;192.168.7.115:60000&lt;/value&gt;</span><br><span class="line">&lt;/property&gt;</span><br><span class="line">&lt;property&gt;</span><br><span class="line"> &lt;name&gt;hbase.zookeeper.quorum&lt;/name&gt;</span><br><span class="line"> &lt;value&gt;192.168.7.105,192.168.7.102,192.168.7.104（slave节点）&lt;/value&gt;</span><br><span class="line">&lt;/property&gt;</span><br><span class="line">&lt;/configuration&gt;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>编辑/hbase/conf/regionservers</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">192.168</span>.7.105</span><br><span class="line"><span class="number">192.168</span>.7.104</span><br><span class="line"><span class="number">192.168</span>.7.102</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>然后讲所有配置拷贝到各个slave节点</p>
+</li>
+<li><p>先启动hdfs，再启动hbase</p>
+</li>
+</ul>
+
+      
+    </div>
+    <footer>
+      
+        
+  
+  <div class="categories">
+    <a href="/categories/nosql/">nosql</a>
+  </div>
+
+        
+  
+  <div class="tags">
+    <a href="/tags/nosql/">nosql</a>, <a href="/tags/tech/">tech</a>
+  </div>
+
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+  <h1 class="title">留言</h1>
+
+  
+      <div id="fb-root"></div>
+<script>
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=123456789012345";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+
+<div class="fb-comments" data-href="http://yoursite.com/2014/02/19/build_hadoop_hbase/index.html" data-num-posts="5" data-width="840" data-colorscheme="light"></div>
+      
+  
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="搜索">
+    <input type="hidden" name="q" value="site:yoursite.com">
+  </form>
+</div>
+
+  
+<div class="widget tag">
+  <h3 class="title">分类</h3>
+  <ul class="entry">
+  
+    <li><a href="/categories/Distributed-System/">Distributed_System</a><small>2</small></li>
+  
+    <li><a href="/categories/nosql/Distributed-System/">Distributed_System</a><small>1</small></li>
+  
+    <li><a href="/categories/nosql/">nosql</a><small>2</small></li>
+  
+    <li><a href="/categories/杂计/">杂计</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+
+  
+<div class="widget tag">
+  <h3 class="title">标签</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/DHT/">DHT</a><small>1</small></li>
+  
+    <li><a href="/tags/Distributed-System/">Distributed System</a><small>3</small></li>
+  
+    <li><a href="/tags/Paxos/">Paxos</a><small>1</small></li>
+  
+    <li><a href="/tags/memcache/">memcache</a><small>1</small></li>
+  
+    <li><a href="/tags/nosql/">nosql</a><small>1</small></li>
+  
+    <li><a href="/tags/tech/">tech</a><small>1</small></li>
+  
+    <li><a href="/tags/新年/">新年</a><small>1</small></li>
+  
+    <li><a href="/tags/计划/">计划</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2016 ShengZhao
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Paxos 算法 | ShengZhao&#39;s Blog</title>
+  <meta name="author" content="ShengZhao">
+  
+  <meta name="description" content="引言有人说分布式系统里面就是可用性，可扩展性，可靠性，一致性，性能等各种特性之间的trade off，没有一个功能是能将分布式所有的问题都解决好，只是根据自己现有的应用场景，对特定的几点进行优化。但是Paxos堪称是完美的算法，基本上没有特殊的限制条件，能够很方便的应用并且已经得到Google，Mi">
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta property="og:title" content="Paxos 算法"/>
+  <meta property="og:site_name" content="ShengZhao&#39;s Blog"/>
+
+  
+    <meta property="og:image" content="undefined"/>
+  
+
+  <link href="/favicon.png" rel="icon">
+  <link rel="alternate" href="/atom.xml" title="ShengZhao&#39;s Blog" type="application/atom+xml">
+  <link rel="stylesheet" href="/css/style.css" media="screen" type="text/css">
+  <!--[if lt IE 9]><script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
+  
+
+</head>
+
+
+<body>
+  <header id="header" class="inner"><div class="alignleft">
+  <h1><a href="/">ShengZhao&#39;s Blog</a></h1>
+  <h2><a href="/">专注分布式技术</a></h2>
+</div>
+<nav id="main-nav" class="alignright">
+  <ul>
+    
+      <li><a href="/">Home</a></li>
+    
+      <li><a href="/archives">Archives</a></li>
+    
+  </ul>
+  <div class="clearfix"></div>
+</nav>
+<div class="clearfix"></div>
+</header>
+  <div id="content" class="inner">
+    <div id="main-col" class="alignleft"><div id="wrapper"><article class="post">
+  
+  <div class="post-content">
+    <header>
+      
+        <div class="icon"></div>
+        <time datetime="2016-01-12T07:44:47.000Z"><a href="/2016/01/12/paxos/">2016-01-12</a></time>
+      
+      
+  
+    <h1 class="title">Paxos 算法</h1>
+  
+
+    </header>
+    <div class="entry">
+      
+        <h2 id="u5F15_u8A00"><a href="#u5F15_u8A00" class="headerlink" title="引言"></a>引言</h2><p>有人说分布式系统里面就是可用性，可扩展性，可靠性，一致性，性能等各种特性之间的trade off，没有一个功能是能将分布式所有的问题都解决好，只是根据自己现有的应用场景，对特定的几点进行优化。但是Paxos堪称是完美的算法，基本上没有特殊的限制条件，能够很方便的应用并且已经得到Google，Micosoft和开源社区的证明。至于Paxos的段子就不多说了，很多学习Paxos的人必然会看到各种Paxos的传奇来历。</p>
+<h4 id="Paxos_u8981_u89E3_u51B3_u7684_u95EE_u9898"><a href="#Paxos_u8981_u89E3_u51B3_u7684_u95EE_u9898" class="headerlink" title="Paxos要解决的问题"></a>Paxos要解决的问题</h4><p>Paxos的一个典型应用场景是在RSM（replicated state machine）中，保证每个副本都执行相同顺序的操作，使所有的副本保持一致。归根结题，Paxos保证在一次Paxos实例中，确定唯一的一个值，而且这个值能够被持久化应用与其他进程。</p>
+<h4 id="u57FA_u672C_u8981_u6C42"><a href="#u57FA_u672C_u8981_u6C42" class="headerlink" title="基本要求"></a>基本要求</h4><p>分布式系统能够正常运行的基本要求通常是Safety &amp; Liveness</p>
+<ul>
+<li>Only a value that has been proposed may be chosen</li>
+<li>Only a single value is chosen</li>
+<li>A process never learns that a value has been chosen unless it actually has been.</li>
+<li>Ensure that some proposed value is eventually chosen and, if a value has been chosen, then a process can eventually learn the value</li>
+<li>Ensure the progress of the system, avoid deadlock</li>
+</ul>
+<h4 id="u524D_u63D0_u5047_u8BBE_uFF08_u8981_u6C42_uFF09"><a href="#u524D_u63D0_u5047_u8BBE_uFF08_u8981_u6C42_uFF09" class="headerlink" title="前提假设（要求）"></a>前提假设（要求）</h4><p>Paxos建立在一个异步网络，没有Byzantine问题的模型中。</p>
+<ul>
+<li>处理器：处理器之间不同步，可能会遇到错误，但是可以提供持久化的存储来记录状态。</li>
+<li>网络：各节点之间可以相互通信，但是可能遇到丢包，乱序，重发等问题。</li>
+</ul>
+<h2 id="u7B97_u6CD5"><a href="#u7B97_u6CD5" class="headerlink" title="算法"></a>算法</h2><h4 id="u89D2_u8272_uFF1A"><a href="#u89D2_u8272_uFF1A" class="headerlink" title="角色："></a>角色：</h4><ul>
+<li>Client：向分布式系统发起请求并等待回复，系统内部的实现对于clien是一个黑盒，请求具体发给谁，消息流是什么样的，client并不清楚。</li>
+<li>Acceptor：用于chosen value时投票决议。</li>
+<li>Proposer：负责将client的请求封装交给系统决议。</li>
+<li>Learner：learner代表了用户的复制参数，一旦proposer的提案被采纳，则learner就可以学习相应的结果。<br>为了能够保证整个Paxos协议的progress（不形成死锁且效率提高），他是一个特殊的proposer，client都把request发给这个proposer，当系统中存在一个proposer，没有冲突效果自然好，但是因为网络分区会存在脑裂现象，这个时候使用Paxos协议依然能够保证最终决策出一个值。</li>
+</ul>
+<h4 id="u7B97_u6CD5_u63A8_u5BFC_u8FC7_u7A0B_uFF1A"><a href="#u7B97_u6CD5_u63A8_u5BFC_u8FC7_u7A0B_uFF1A" class="headerlink" title="算法推导过程："></a>算法推导过程：</h4><ol>
+<li><p>如果我们的系统里面只有一个acceptor，那acceptor就选择它接收到的第一个proposal作为chosen value就可以了，但是这样显然存在单点故障问题。</p>
+</li>
+<li><p>这个时候就要考虑发给多机。如果是发给全部的节点，这样会退化成两阶段提交，可用性下降。这个时候就选择用majority的节点来完成，因为任何两个majority必然有一个相同的acceptor，由于每个acceptor只接收一个值，因此只有一个proposal能够得到majority，保证了系统的Liveness。<br>因此我们先得到一个约束：<br>P1. An acceptor must accept the first proposal that it receives.</p>
+</li>
+<li><p>只有P1约束可以chosen value吗？显然不行，下面看这样一个例子：假设有两个proposal同时发起请求。<br>if 所有的请求能够定序，那我们自然能够选择确定的一个（比如第一个）达成一致。<br> else， 乱序到达，我们需要majority来接受这个proposal。此时如果有A1,A2,A3,A4,A5，5个acceptor，其中P1被A1，A2首先accept，P2被A3，A4accept，不幸的是A5挂掉了，此时全局没有majority，算法失败（何以谈safety and liveness？）。</p>
+<ol>
+<li><p>因此，根据3中描述的问题，能够得到结论，acceptor必须允许接受多个proposal。因此我们先对这些proposal标号（这个标号表明在全局的全序关系）。</p>
+</li>
+<li><p>当一个acceptpr能够接受多个proposal时，为了能够支持“基本要求”中的第二条，则必须保证所有被chosen的proposal要有相同的value。<br>P2. If a proposal with value v is chosen, then every higher-numbered proposal that is chosen has value v.</p>
+</li>
+<li><p>批准一个value意味着多个acceptor接受了该value。因此，可以对P2进行加强。<br>P2a. If a proposal with value v is chosen, then every higher-numbered proposal accepted by any acceptor has value v.(P2a：一旦一个具有value v的提案被批准（chosen），那么之后任何acceptor再次接受（accept）的提案必须具有value v。)</p>
+</li>
+<li><p>为了维护P1，由于通信时异步的，我们可以考虑有如下场景，一个acceptor c从来没有参与过投票，而其他acceptors已经chosen一个proposal P，此时如果又有一个proposer发出一个Proposal Q，正好发给c，根据P1，c必须接受Q，但是P和Q有不同的value值，违反了P2a，因此我们需要继续对P2a进行约束。<br>P2b. If a proposal with value v is chosen, then every higher-numbered proposal issued by any proposal proposal has value v.</p>
+</li>
+<li><p>由于P2b不好实现，因此提出了一个更强的约束。<br>我们要保证的是如果v被chosen，以后任何proposal只能是v。这就要求但凡有一个（n，v）能提出来，则要不就是之前从来没有value被chosen，那现在chosen什么样的值都不违背P2b，要不就是之前已经chosen，但是是标号小于n的最大proposal number里面包含v。<br>P2c. For any v and n, if a proposal with value v ad number n is issued, the there is a set S consisting of a majority of acceptors such that either (a) no acceptors in S has accepted any proposal numbered less than n, or (b) v is the value of the highest-numbered proposal among all proposals numbered less than n accepted by the acceptors in S.<br>假设具有value v的提案m获得批准，当n=m+1时，采用反证法，假如提案n不具有value v，而是具有value w，根据P2c，则存在一个多数派S1，要么他们中没有人接受过编号小于n的任何提案，要么他们已经接受的所有编号小于n的提案中编号最大的那个提案是value w。由于S1和通过提案m时的多数派C之间至少有一个公共的acceptor，所以以上两个条件都不成立，导出矛盾从而推翻假设，证明了提案n必须具有value v；<br>再做一个略形式化的证明，采用反证法<br>若（m+1）..（N-1）所有提案都具有value v，采用反证法，假如新提案N不具有value v，而是具有value w’,根据P2c，则存在一个多数派S2，要么他们没有接受过m..（N-1）中的任何提案，要么他们已经接受的所有编号小于N的提案中编号最大的那个提案是value w’。由于S2和通过m的多数派C之间至少有一个公共的acceptor，所以至少有一个acceptor曾经接受了m，从而也可以推出S2中已接受的所有编号小于n的提案中编号最大的那个提案的编号范围在m..（N-1）之间，而根据初始假设，m..（N-1）之间的所有提案都具有value v，所以S2中已接受的所有编号小于n的提案中编号最大的那个提案肯定具有value v，导出矛盾从而推翻新提案n不具有value v的假设。根据数学归纳法，我们证明了若满足P2c，则P2b一定满足。</p>
+</li>
+<li><p>为了维护P2c，一个标号为n的proposal必须学习小于n的已经被chosen的最大的proposal-numbered对应的v，而这个值被chosen可能是已经发生了，也可能是将要发生（因为通信异步，还有一些acceptor没有给出答案），如果学习已经确定的这很简单（majority中肯定有），但是如果学习将来要chosen的比较难，因此这个地方又做了一个限制。<br>The proposer requests that the acceptors not accept any more proposals numbered less than n.<br>P1a. An acceptor can accept a proposal numbered n iff it has not responded to a prepare request having a number greater than n.</p>
+<p>整理一下上述证明过程，能够得到的结果如下：</p>
+</li>
+</ol>
+</li>
+</ol>
+<h4 id="u7B97_u6CD5_u63CF_u8FF0"><a href="#u7B97_u6CD5_u63CF_u8FF0" class="headerlink" title="算法描述"></a>算法描述</h4><p>prepare阶段：</p>
+<ul>
+<li>proposer选择一个提案编号n并将prepare请求发送给acceptors中的一个多数派</li>
+<li>acceptor收到prepare消息后，如果当前的编号大于它已经回复的所有prepare消息，则acceptor将自己上次接受的提案回复给proposer，并承诺不再回复小于n的提案</li>
+</ul>
+<p>批准阶段：</p>
+<ul>
+<li>当一个proposer收到了多数acceptors对prepare恢复后，就进入批准阶段。他要向acceptors发送accept请求，包括编号n和根据P2c决定的value，如果根据P2c没有已经接受的value，那么它可以自由决定value</li>
+<li>在不违背自己向其他proposer的承诺的前提下，acceptor收到acceptor请求后即回复这个请求。<br>（阶段1和阶段2所请求的acceptors可以不同）</li>
+</ul>
+
+      
+    </div>
+    <footer>
+      
+        
+  
+  <div class="categories">
+    <a href="/categories/Distributed-System/">Distributed_System</a>
+  </div>
+
+        
+  
+  <div class="tags">
+    <a href="/tags/Distributed-System/">Distributed System</a>, <a href="/tags/Paxos/">Paxos</a>
+  </div>
+
+        
+  <div class="addthis addthis_toolbox addthis_default_style">
+    
+      <a class="addthis_button_facebook_like" fb:like:layout="button_count"></a>
+    
+    
+      <a class="addthis_button_tweet"></a>
+    
+    
+      <a class="addthis_button_google_plusone" g:plusone:size="medium"></a>
+    
+    
+      <a class="addthis_button_pinterest_pinit" pi:pinit:layout="horizontal"></a>
+    
+    <a class="addthis_counter addthis_pill_style"></a>
+  </div>
+  <script type="text/javascript" src="//s7.addthis.com/js/300/addthis_widget.js"></script>
+
+      
+      <div class="clearfix"></div>
+    </footer>
+  </div>
+</article>
+
+
+<section id="comment">
+  <h1 class="title">留言</h1>
+
+  
+      <div id="fb-root"></div>
+<script>
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/all.js#xfbml=1&appId=123456789012345";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+
+<div class="fb-comments" data-href="http://yoursite.com/2016/01/12/paxos/index.html" data-num-posts="5" data-width="840" data-colorscheme="light"></div>
+      
+  
+</section>
+
+</div></div>
+    <aside id="sidebar" class="alignright">
+  <div class="search">
+  <form action="//google.com/search" method="get" accept-charset="utf-8">
+    <input type="search" name="q" results="0" placeholder="搜索">
+    <input type="hidden" name="q" value="site:yoursite.com">
+  </form>
+</div>
+
+  
+<div class="widget tag">
+  <h3 class="title">分类</h3>
+  <ul class="entry">
+  
+    <li><a href="/categories/Distributed-System/">Distributed_System</a><small>2</small></li>
+  
+    <li><a href="/categories/nosql/Distributed-System/">Distributed_System</a><small>1</small></li>
+  
+    <li><a href="/categories/nosql/">nosql</a><small>2</small></li>
+  
+    <li><a href="/categories/杂计/">杂计</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+
+  
+<div class="widget tag">
+  <h3 class="title">标签</h3>
+  <ul class="entry">
+  
+    <li><a href="/tags/DHT/">DHT</a><small>1</small></li>
+  
+    <li><a href="/tags/Distributed-System/">Distributed System</a><small>3</small></li>
+  
+    <li><a href="/tags/Paxos/">Paxos</a><small>1</small></li>
+  
+    <li><a href="/tags/memcache/">memcache</a><small>1</small></li>
+  
+    <li><a href="/tags/nosql/">nosql</a><small>1</small></li>
+  
+    <li><a href="/tags/tech/">tech</a><small>1</small></li>
+  
+    <li><a href="/tags/新年/">新年</a><small>1</small></li>
+  
+    <li><a href="/tags/计划/">计划</a><small>1</small></li>
+  
+  </ul>
+</div>
+
+</aside>
+    <div class="clearfix"></div>
+  </div>
+  <footer id="footer" class="inner"><div class="alignleft">
+  
+  &copy; 2016 ShengZhao
+  
+</div>
+<div class="clearfix"></div></footer>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+<script src="/js/jquery.imagesloaded.min.js"></script>
+<script src="/js/gallery.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css" media="screen" type="text/css">
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+<script type="text/javascript">
+(function($){
+  $('.fancybox').fancybox();
+})(jQuery);
+</script>
+
+</body>
+</html>
